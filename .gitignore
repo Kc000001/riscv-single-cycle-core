@@ -1,0 +1,12 @@
+# Windows & Simulation generated files
+*.vvp
+*.vcd
+*.exe
+*.bak
+
+# Editor & OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
