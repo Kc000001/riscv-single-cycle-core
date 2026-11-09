@@ -12,6 +12,7 @@
 //   2'b00 : I-type (Loads, ADDI)   -> Imm = { {20{Instr[31]}}, Instr[31:20] }
 //   2'b01 : S-type (Stores, SW)    -> Imm = { {20{Instr[31]}}, Instr[31:25], Instr[11:7] }
 //   2'b10 : B-type (Branches, BEQ) -> Imm = { {20{Instr[31]}}, Instr[7], Instr[30:25], Instr[11:8], 1'b0 }
+//   2'b11 : J-type (Jumps, JAL)    -> Imm = { {12{Instr[31]}}, Instr[19:12], Instr[20], Instr[30:21], 1'b0 }
 // ============================================================================
 
 module sign_extend (
@@ -30,6 +31,9 @@ module sign_extend (
 
             // B-type: bits [31], [7], [30:25], [11:8], with LSB=0 (halfword aligned)
             2'b10: Imm_Ext = {{20{Instr[31]}}, Instr[7], Instr[30:25], Instr[11:8], 1'b0};
+
+            // J-type: bits [31], [19:12], [20], [30:21], with LSB=0
+            2'b11: Imm_Ext = {{12{Instr[31]}}, Instr[19:12], Instr[20], Instr[30:21], 1'b0};
 
             default: Imm_Ext = 32'h00000000;
         endcase

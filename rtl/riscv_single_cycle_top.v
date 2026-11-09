@@ -186,3 +186,4 @@ module riscv_single_cycle_top (
     assign MemWrite_out  = MemWrite;
 
 endmodule
+

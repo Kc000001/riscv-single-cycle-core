@@ -167,3 +167,4 @@ vvp sim/tb_top.vvp
 ```powershell
 gtkwave sim/riscv_top.vcd
 ```
+
