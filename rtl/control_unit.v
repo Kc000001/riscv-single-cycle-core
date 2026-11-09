@@ -15,8 +15,9 @@ module control_unit (
     output wire [1:0] ImmSrc,
     output wire       ALUSrc,
     output wire       MemWrite,
-    output wire       ResultSrc,
+    output wire [1:0] ResultSrc,
     output wire       Branch,
+    output wire       Jump,
     output wire [2:0] ALUControl
 );
 
@@ -31,6 +32,7 @@ module control_unit (
         .MemWrite(MemWrite),
         .ResultSrc(ResultSrc),
         .Branch(Branch),
+        .Jump(Jump),
         .ALUOp(ALUOp)
     );
 
@@ -44,4 +46,3 @@ module control_unit (
     );
 
 endmodule
-

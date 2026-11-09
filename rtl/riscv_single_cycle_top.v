@@ -4,14 +4,15 @@
 //
 // Integrated Submodules:
 //   - pc                  : Program Counter register
-//   - pc_adder (x2)       : PC+4 sequential adder & PC+Imm branch target adder
+//   - pc_adder (x2)       : PC+4 sequential adder & PC+Imm branch/jump target adder
 //   - instruction_memory  : Instruction ROM preloaded via memfile.hex
 //   - register_file       : 32 x 32-bit general-purpose registers (x0 to x31)
-//   - sign_extend         : Immediate generator for I, S, and B type formats
+//   - sign_extend         : Immediate generator for I, S, B, and J type formats
 //   - alu                 : 32-bit Arithmetic Logic Unit
 //   - control_unit        : Combined Main Decoder and ALU Decoder
 //   - data_memory         : 1024-word Data RAM
-//   - mux2 (x3)           : PC select, ALU input B select, Write-Back select
+//   - mux2 (x2)           : PC select, ALU input B select
+//   - mux3 (x1)           : Write-Back select (ALUResult, ReadData, or PC+4)
 // ============================================================================
 
 module riscv_single_cycle_top (
@@ -30,13 +31,14 @@ module riscv_single_cycle_top (
     // ------------------------------------------------------------------------
     // Internal Datapath and Control Wires
     // ------------------------------------------------------------------------
-    wire [31:0] PC, PC_Next, PCPlus4, PCTarget;
+    wire [31:0] PC, PC_Next, PCPlus4, PCTarget, JumpTarget;
     wire [31:0] Instr;
     wire [31:0] SrcA, RD2, SrcB;
     wire [31:0] Imm_Ext;
     wire [31:0] ALUResult, ReadData, Result;
 
-    wire        RegWrite, MemWrite, ALUSrc, ResultSrc, Branch;
+    wire        RegWrite, MemWrite, ALUSrc, Branch, Jump;
+    wire [1:0]  ResultSrc;
     wire [1:0]  ImmSrc;
     wire [2:0]  ALUControl;
     wire        Zero, Negative, Carry, OverFlow;
@@ -46,13 +48,19 @@ module riscv_single_cycle_top (
     // Instruction Fetch (IF) Stage
     // ------------------------------------------------------------------------
     
-    // Branch decision: Branch taken when instruction is Branch AND ALU Result is Zero (rs1 == rs2)
-    assign PCSrc = Branch & Zero;
+    // PC update decision:
+    // PCSrc = 1 if unconditional Jump (JAL/JALR) OR conditional Branch taken (BEQ with Zero=1)
+    assign PCSrc = Jump | (Branch & Zero);
 
-    // Mux selecting next PC: either sequential (PC+4) or branch target (PC + Imm)
+    // Jump Target Selection:
+    // For JALR (opcode 7'b1100111), target is rs1 + imm (computed in ALU)
+    // For JAL and BEQ, target is PC + Imm_Ext (computed by pc_branch_add)
+    assign JumpTarget = (Instr[6:0] == 7'b1100111) ? ALUResult : PCTarget;
+
+    // Mux selecting next PC: sequential (PC+4) vs Target (Branch / Jump)
     mux2 #(32) mux_pc (
         .a(PCPlus4),
-        .b(PCTarget),
+        .b(JumpTarget),
         .s(PCSrc),
         .c(PC_Next)
     );
@@ -72,7 +80,7 @@ module riscv_single_cycle_top (
         .c(PCPlus4)
     );
 
-    // PC + Immediate Adder (branch target address calculation)
+    // PC + Immediate Adder (branch / JAL target address calculation)
     pc_adder pc_branch_add (
         .a(PC),
         .b(Imm_Ext),
@@ -91,7 +99,6 @@ module riscv_single_cycle_top (
     // ------------------------------------------------------------------------
 
     // Control Unit (Main Decoder + ALU Decoder)
-    // Note: Instr[30] is funct7[5], Instr[14:12] is funct3, Instr[6:0] is Opcode
     control_unit cu (
         .Op(Instr[6:0]),
         .funct3(Instr[14:12]),
@@ -102,6 +109,7 @@ module riscv_single_cycle_top (
         .MemWrite(MemWrite),
         .ResultSrc(ResultSrc),
         .Branch(Branch),
+        .Jump(Jump),
         .ALUControl(ALUControl)
     );
 
@@ -118,7 +126,7 @@ module riscv_single_cycle_top (
         .RD2(RD2)          // output 2
     );
 
-    // Sign Extension Unit (generates 32-bit immediate from 12-bit instruction fields)
+    // Sign Extension Unit (generates 32-bit immediate from 12/20-bit instruction fields)
     sign_extend ext (
         .Instr(Instr),
         .ImmSrc(ImmSrc),
@@ -167,12 +175,16 @@ module riscv_single_cycle_top (
     // Write-Back (WB) Stage
     // ------------------------------------------------------------------------
 
-    // Write-Back Multiplexer (selects between ALU Result and Data Memory ReadData)
-    mux2 #(32) mux_result (
+    // 3-Way Write-Back Multiplexer:
+    // 2'b00 -> ALUResult
+    // 2'b01 -> ReadData from RAM
+    // 2'b10 -> PCPlus4 (saved return address for JAL / JALR)
+    mux3 #(32) mux_result (
         .a(ALUResult),
         .b(ReadData),
+        .c(PCPlus4),
         .s(ResultSrc),
-        .c(Result)
+        .d(Result)
     );
 
     // ------------------------------------------------------------------------
@@ -186,4 +198,3 @@ module riscv_single_cycle_top (
     assign MemWrite_out  = MemWrite;
 
 endmodule
-

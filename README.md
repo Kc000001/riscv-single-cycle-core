@@ -6,7 +6,7 @@ A synthesizable, 32-bit single-cycle **RISC-V (RV32I base integer subset)** proc
 
 ## 📌 Architecture Overview
 
-In this single-cycle microarchitecture, every instruction executes in **exactly one clock cycle** ($\text{CPI} = 1$). The processor features the classic 5-stage Harvard datapath (separate instruction and data memories to prevent structural hazards in a single cycle).
+In this single-cycle microarchitecture, every instruction executes in **exactly one clock cycle** (`CPI = 1`). The processor features the classic 5-stage Harvard datapath (separate instruction and data memories to prevent structural hazards in a single cycle).
 
 ```mermaid
 flowchart LR
@@ -53,18 +53,18 @@ flowchart LR
 
 ## 🛠️ Supported Instruction Set (RV32I Subset)
 
-| Instruction | Type | Syntax | Operation | Description |
+| Instruction | Type | Syntax | RTL Operation | Description |
 | :--- | :---: | :--- | :--- | :--- |
-| **`ADD`** | R | `add rd, rs1, rs2` | $rd = rs1 + rs2$ | Integer addition |
-| **`SUB`** | R | `sub rd, rs1, rs2` | $rd = rs1 - rs2$ | Integer subtraction via 2's complement |
-| **`AND`** | R | `and rd, rs1, rs2` | $rd = rs1 \ \& \ rs2$ | Bitwise AND |
-| **`OR`** | R | `or rd, rs1, rs2` | $rd = rs1 \ \| \ rs2$ | Bitwise OR |
-| **`XOR`** | R | `xor rd, rs1, rs2` | $rd = rs1 \oplus rs2$ | Bitwise XOR |
-| **`SLT`** | R | `slt rd, rs1, rs2` | $rd = (rs1 < rs2) \ ? \ 1 : 0$ | Signed Set Less Than |
-| **`ADDI`** | I | `addi rd, rs1, imm`| $rd = rs1 + \text{imm}$ | Add immediate |
-| **`LW`** | I | `lw rd, offset(rs1)`| $rd = \text{RAM}[rs1 + \text{imm}]$ | Load 32-bit word from memory |
-| **`SW`** | S | `sw rs2, offset(rs1)`| $\text{RAM}[rs1 + \text{imm}] = rs2$ | Store 32-bit word to memory |
-| **`BEQ`** | B | `beq rs1, rs2, label`| if ($rs1 == rs2$) $\text{PC} = \text{PC} + \text{imm}$ | Branch if equal |
+| **`ADD`** | R | `add rd, rs1, rs2` | `rd = rs1 + rs2` | 32-bit integer addition |
+| **`SUB`** | R | `sub rd, rs1, rs2` | `rd = rs1 - rs2` | 32-bit subtraction via 2's complement |
+| **`AND`** | R | `and rd, rs1, rs2` | `rd = rs1 & rs2` | Bitwise logical AND |
+| **`OR`** | R | `or rd, rs1, rs2` | `rd = rs1 \| rs2` | Bitwise logical OR |
+| **`XOR`** | R | `xor rd, rs1, rs2` | `rd = rs1 ^ rs2` | Bitwise logical XOR |
+| **`SLT`** | R | `slt rd, rs1, rs2` | `rd = (rs1 < rs2) ? 1 : 0` | Signed Set Less Than |
+| **`ADDI`** | I | `addi rd, rs1, imm`| `rd = rs1 + imm` | Add sign-extended 12-bit immediate |
+| **`LW`** | I | `lw rd, offset(rs1)`| `rd = RAM[rs1 + imm]` | Load 32-bit word from data memory |
+| **`SW`** | S | `sw rs2, offset(rs1)`| `RAM[rs1 + imm] = rs2` | Store 32-bit word to data memory |
+| **`BEQ`** | B | `beq rs1, rs2, label`| `if (rs1 == rs2) PC = PC + imm` | Branch to target if equal |
 
 ---
 
@@ -80,10 +80,11 @@ flowchart LR
 │   ├── instruction_memory.v            # 1024-word Instruction ROM ($readmemh loader)
 │   ├── main_decoder.v                  # Opcode decoder generating datapath control signals
 │   ├── mux2.v                          # Parameterized 2-to-1 multiplexer
+│   ├── mux3.v                          # Parameterized 3-to-1 multiplexer
 │   ├── pc.v                            # Program Counter register with synchronous reset
 │   ├── pc_adder.v                      # Dedicated 32-bit adder
 │   ├── register_file.v                 # 32 x 32-bit registers (x0 hardwired to 0)
-│   ├── sign_extend.v                   # Immediate generator for I, S, and B formats
+│   ├── sign_extend.v                   # Immediate generator for I, S, B, and J formats
 │   └── riscv_single_cycle_top.v        # Top-level integrated processor core
 ├── tb/                                 # Self-Checking Testbenches
 │   ├── tb_alu.v                        # Unit test for ALU operations & overflow
@@ -104,15 +105,20 @@ flowchart LR
 
 1. **Hardware-Enforced Invariant on `x0`**:
    In RISC-V specifications, register `x0` must always be zero. The register file explicitly prevents overwrites to `x0` and always outputs `32'b0` when reading address `5'd0`.
+
 2. **Mathematically Sound SLT Comparison**:
-   Naive implementations evaluate $A < B$ solely by checking sign bit `Sum[31]`, which produces errors during arithmetic overflow. This core computes:
-   $$\text{SLT} = \text{Sum}[31] \oplus \text{OverFlow}$$
+   Naive implementations evaluate `A < B` solely by checking the sign bit `Sum[31]`, which produces false results during arithmetic overflow. This core correctly computes:
+   ```verilog
+   SLT = Sum[31] ^ OverFlow;
+   ```
+
 3. **Dedicated Branch Target Hardware**:
    Full support for conditional branching (`BEQ`) with branch target calculation:
-   $$\text{PC\_Target} = \text{PC} + \text{Imm\_Ext}$$
-   $$\text{PCSrc} = \text{Branch} \ \& \ \text{Zero}$$
+   * Target Address: `PC_Target = PC + Imm_Ext`
+   * Branch Decision: `PCSrc = Branch & Zero`
+
 4. **Clean Word Alignment**:
-   Memory addressing properly handles byte-to-word translation using `A[31:2]`.
+   Memory addressing properly handles byte-to-word translation using `A[31:2]` to bridge the RISC-V byte-addressed architecture with word-organized memory arrays.
 
 ---
 
@@ -167,4 +173,3 @@ vvp sim/tb_top.vvp
 ```powershell
 gtkwave sim/riscv_top.vcd
 ```
-

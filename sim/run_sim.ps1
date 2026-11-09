@@ -12,6 +12,7 @@ iverilog -o sim/tb_top.vvp `
     rtl/data_memory.v `
     rtl/sign_extend.v `
     rtl/mux2.v `
+    rtl/mux3.v `
     rtl/main_decoder.v `
     rtl/alu_decoder.v `
     rtl/control_unit.v `
